@@ -1,8 +1,6 @@
 # openslate
 A decentralized browser-based ledger crypto thingie
 
-# openslate // sovereign network
-
 **openslate** is an experimental, fully decentralized, browser-based ledger system. It uses WebRTC for peer-to-peer swarm communication and SHA-256 Proof of Work consensus to mint the native `SLATE` asset directly inside your web browser.
 
 ## 🌐 The Browser App
