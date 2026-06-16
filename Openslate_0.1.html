@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>openslate // sovereign network</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-deep: #05070a;
+            --surface-base: #0f1218;
+            --surface-elevated: #161a23;
+            --border-subtle: #232936;
+            --border-focus: #3b4457;
+            
+            --accent-primary: #ffffff;
+            --accent-slate: #818cf8; /* Slate Blue Theme Accent */
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-error: #ef4444;
+            
+            --text-main: #f8fafc;
+            --text-muted: #64748b;
+            
+            --font-sans: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+        
+        * { box-sizing: border-box; }
+        
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            padding: 0; margin: 0;
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; width: 100vw;
+            letter-spacing: -0.01em; overflow: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(129, 140, 248, 0.03) 0%, transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(255, 255, 255, 0.02) 0%, transparent 25%);
+        }
+
+        .app-frame {
+            width: 100vw; height: 100vh;
+            background: var(--surface-base);
+            display: flex; flex-direction: column;
+            position: relative; overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @media (min-width: 768px) and (min-height: 600px) {
+            .app-frame {
+                width: 95vw; max-width: 1100px; height: 85vh; max-height: 900px;
+                border: 1px solid var(--border-subtle); border-radius: 24px;
+                box-shadow: 0 40px 100px -20px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.03);
+            }
+        }
+
+        /* --- HEADER --- */
+        .app-banner {
+            background: rgba(15, 18, 24, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 20px 28px; display: flex; justify-content: space-between; align-items: center;
+            z-index: 10;
+        }
+
+        .app-title { font-size: 22px; font-weight: 800; letter-spacing: -0.06em; color: var(--accent-primary); display: flex; align-items: center; gap: 8px;}
+        .app-title span { color: var(--accent-slate); font-weight: 600; }
+        
+        /* Little logo diamond */
+        .app-title::before {
+            content: ''; display: block; width: 12px; height: 12px;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-slate) 100%);
+            transform: rotate(45deg); border-radius: 2px;
+        }
+
+        .network-node-indicator { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+        .indicator-dot { width: 8px; height: 8px; background: var(--accent-warning); border-radius: 50%; box-shadow: 0 0 12px var(--accent-warning); transition: all 0.3s ease; }
+
+        /* --- SCREENS --- */
+        .screen { display: none; flex-direction: column; flex: 1; padding: 32px 28px; overflow-y: auto; scroll-behavior: smooth; }
+        .screen.active { display: flex; animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+        h2 { font-size: 32px; font-weight: 800; margin: 0 0 8px 0; letter-spacing: -0.04em; }
+        .screen-description { font-size: 15px; color: var(--text-muted); margin: 0 0 36px 0; line-height: 1.6; max-width: 520px; }
+
+        /* --- INPUTS & BUTTONS --- */
+        .input-block { margin-bottom: 24px; }
+        .input-block label { display: block; font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+        
+        input, textarea {
+            width: 100%; padding: 16px 20px; background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-subtle); color: var(--text-main); font-family: var(--font-sans);
+            font-size: 15px; border-radius: 14px; transition: all 0.2s ease;
+        }
+        input:focus, textarea:focus { outline: none; border-color: var(--accent-slate); background: rgba(0,0,0,0.5); box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.1); }
+        textarea { height: 72px; resize: none; line-height: 1.5; font-family: var(--font-mono); font-size: 13px; }
+
+        button {
+            width: 100%; padding: 18px; background: var(--accent-primary); color: var(--bg-deep);
+            font-size: 15px; font-weight: 700; border: none; border-radius: 14px; cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 12px 24px -10px rgba(255,255,255,0.25); }
+        button:active { transform: translateY(0) scale(0.98); }
+
+        .btn-slate-layer { background: var(--surface-elevated); color: var(--text-main); border: 1px solid var(--border-subtle); }
+        .btn-slate-layer:hover { background: var(--border-subtle); box-shadow: none; }
+
+        /* --- DASHBOARD ELEMENTS --- */
+        .interface-tabs { display: flex; gap: 8px; margin-bottom: 28px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 18px; border: 1px solid var(--border-subtle); flex-shrink: 0; overflow-x: auto; }
+        .tab-trigger { flex: 1; padding: 14px 16px; font-size: 13px; font-weight: 600; background: transparent; color: var(--text-muted); border: none; border-radius: 12px; white-space: nowrap; transition: all 0.2s ease; }
+        .tab-trigger:hover { color: var(--text-main); }
+        .tab-trigger.active { color: var(--bg-deep); background: var(--accent-primary); box-shadow: 0 4px 12px rgba(255,255,255,0.1); }
+
+        .balance-slab {
+            background: linear-gradient(180deg, var(--surface-elevated) 0%, rgba(22, 26, 35, 0.4) 100%);
+            border: 1px solid var(--border-subtle); border-radius: 24px; padding: 40px 24px;
+            text-align: center; margin-bottom: 24px; flex-shrink: 0; position: relative; overflow: hidden;
+        }
+        
+        /* The Ambient Glow behind the balance */
+        .balance-slab::before {
+            content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 200px; height: 100px; background: var(--accent-slate); filter: blur(80px);
+            opacity: 0.15; pointer-events: none; animation: breathe 4s infinite ease-in-out alternate;
+        }
+        @keyframes breathe { 0% { opacity: 0.1; transform: translate(-50%, -50%) scale(0.9); } 100% { opacity: 0.2; transform: translate(-50%, -50%) scale(1.1); } }
+
+        .balance-amount { font-size: 56px; font-weight: 800; margin: 0; display: inline-flex; align-items: center; gap: 12px; letter-spacing: -0.04em; position: relative; z-index: 2; }
+        
+        .balance-ticker { 
+            font-size: 14px; font-weight: 800; color: var(--bg-deep); background: var(--accent-primary); 
+            padding: 4px 10px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.05em; 
+            transform: translateY(-8px);
+        }
+
+        .dashboard-grid { display: flex; flex-direction: column; gap: 24px; flex: 1; }
+        @media (min-width: 800px) { .dashboard-grid { flex-direction: row; overflow: hidden; } .dashboard-side { flex: 1; overflow-y: auto; padding-right: 8px; height: 100%; } }
+
+        .sub-slab-container { background: var(--surface-elevated); border: 1px solid var(--border-subtle); padding: 24px; border-radius: 20px; margin-bottom: 20px; }
+        .sub-slab-container h3 { font-size: 12px; font-weight: 800; color: var(--text-muted); margin: 0 0 20px 0; text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 8px; }
+
+        /* --- CHAT FEED --- */
+        .content-well { background: rgba(0,0,0,0.4); border: 1px inset rgba(255,255,255,0.02); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; flex: 1; min-height: 200px; margin-bottom: 16px; overflow: hidden; }
+        .scrollable-feed { flex: 1; overflow-y: auto; font-size: 14px; display: flex; flex-direction: column; gap: 12px; padding-right: 8px; scroll-behavior: smooth; }
+        .feed-item { background: var(--surface-elevated); padding: 14px 18px; border: 1px solid var(--border-subtle); border-radius: 12px; line-height: 1.5; animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .feed-author-tag { font-weight: 800; color: var(--accent-slate); margin-right: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-15px); } to { opacity: 1; transform: translateX(0); } }
+
+        /* --- MINING TELEMETRY --- */
+        .telemetry-block { font-family: var(--font-mono); font-size: 13px; background: rgba(0,0,0,0.5); padding: 24px; border-radius: 14px; border: 1px solid var(--border-subtle); margin-bottom: 24px; line-height: 1.8; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); }
+        .pulse-text { animation: pulse 2s infinite; color: var(--accent-warning); font-weight: 700; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        /* --- TOAST NOTIFICATIONS --- */
+        #toastContainer { position: fixed; top: 24px; right: 24px; display: flex; flex-direction: column; gap: 12px; z-index: 100; pointer-events: none; }
+        .toast { background: rgba(22, 26, 35, 0.95); backdrop-filter: blur(8px); border: 1px solid var(--border-subtle); color: var(--text-main); padding: 16px 20px; border-radius: 14px; font-size: 14px; font-weight: 600; box-shadow: 0 10px 40px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 12px; animation: toastEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; pointer-events: auto; }
+        .toast.success { border-left: 4px solid var(--accent-success); }
+        .toast.error { border-left: 4px solid var(--accent-error); }
+        .toast.info { border-left: 4px solid var(--accent-slate); }
+        @keyframes toastEnter { from { opacity: 0; transform: translateX(100%) scale(0.9); } to { opacity: 1; transform: translateX(0) scale(1); } }
+        @keyframes toastExit { from { opacity: 1; transform: translateX(0) scale(1); } to { opacity: 0; transform: translateX(100%) scale(0.9); } }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--border-focus); border-radius: 2px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+    </style>
+</head>
+<body>
+
+<div id="toastContainer"></div>
+
+<div class="app-frame">
+    
+    <div class="app-banner">
+        <div class="app-title">open<span>slate</span></div>
+        <div class="network-node-indicator">
+            <div class="indicator-dot" id="netDot"></div>
+            <span id="networkStatusText">Seeking Swarm...</span>
+        </div>
+    </div>
+
+    <div id="screenLogin" class="screen active">
+        <div style="max-width: 480px; width:100%; margin: 40px auto 0;">
+            <h2>Initialize Node</h2>
+            <p class="screen-description">Enter your account handle and key phrase sequences to spin up your local cryptographic node on the openslate network.</p>
+            
+            <div class="input-block">
+                <label>Handle Identifier</label>
+                <input type="text" id="loginUsername" placeholder="e.g., alex">
+            </div>
+            <div class="input-block">
+                <label>Safety Sequence Alpha</label>
+                <textarea id="loginSeed1" placeholder="Enter first 12 words..."></textarea>
+            </div>
+            <div class="input-block">
+                <label>Safety Sequence Beta</label>
+                <textarea id="loginSeed2" placeholder="Enter second 12 words..."></textarea>
+            </div>
+            <button onclick="executeThresholdLogin()" style="margin-top: 12px;">Open Secure Session</button>
+            <div style="text-align: center; margin-top: 32px; font-size: 14px; color: var(--text-muted);">
+                Need an identity? <span onclick="switchScreen('screenRegister')" style="color: var(--accent-primary); cursor: pointer; font-weight: 600; text-decoration: underline; text-underline-offset: 4px;">Generate one</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="screenRegister" class="screen">
+        <div style="max-width: 700px; width:100%; margin: 20px auto 0;">
+            <h2>Generate Identity</h2>
+            <p class="screen-description">Secure an independent openslate handle. The system initializes three mathematically interlocked safety cards entirely client-side.</p>
+            
+            <div class="input-block" id="regInputArea">
+                <label>Choose Public Handle</label>
+                <input type="text" id="regUsername" placeholder="Letters and numbers only">
+                <button style="margin-top:24px;" onclick="generateThresholdKeyVitals()">Compile Offline Seeds</button>
+            </div>
+            
+            <div id="seedOutputZone" style="display:none;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                    <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:8px;font-weight:800;">CARD ALPHA</label><div class="backup-preview-box" style="font-family:var(--font-mono);font-size:12px;background:rgba(0,0,0,0.4);padding:16px;border-radius:12px;border:1px solid var(--border-subtle);color:var(--accent-slate);" id="cardA"></div></div>
+                    <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:8px;font-weight:800;">CARD BETA</label><div class="backup-preview-box" style="font-family:var(--font-mono);font-size:12px;background:rgba(0,0,0,0.4);padding:16px;border-radius:12px;border:1px solid var(--border-subtle);color:var(--accent-slate);" id="cardB"></div></div>
+                    <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:8px;font-weight:800;">CARD GAMMA</label><div class="backup-preview-box" style="font-family:var(--font-mono);font-size:12px;background:rgba(0,0,0,0.4);padding:16px;border-radius:12px;border:1px solid var(--border-subtle);color:var(--accent-slate);" id="cardC"></div></div>
+                </div>
+                
+                <button class="btn-slate-layer" onclick="exportThresholdVitalsPDF()">📥 Export Backup Sheet (PDF)</button>
+                <button style="margin-top: 12px;" onclick="switchScreen('screenLogin')">Cards Secured: Proceed to Login</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="screenDashboard" class="screen">
+        <div class="interface-tabs">
+            <div style="font-size:14px; padding:10px 16px; font-weight:800; color:var(--text-main); display: flex; align-items: center; border-right: 1px solid var(--border-subtle); margin-right: 8px;">
+                @<span id="activeUser">user</span>
+            </div>
+            <button class="tab-trigger active" id="btnTabTx" onclick="switchTab('tabTx')">Ledger</button>
+            <button class="tab-trigger" id="btnTabChat" onclick="switchTab('tabChat')">Swarm Chat</button>
+            <button class="tab-trigger" id="btnTabMining" onclick="switchTab('tabMining')">Consensus</button>
+            <button style="width:auto; padding:0 16px; background:transparent; color:var(--accent-error); border:none; font-weight:700; font-size:13px; margin-left:auto;" onclick="terminateSessionLogout()">Disconnect</button>
+        </div>
+
+        <div class="balance-slab">
+            <p class="balance-amount">
+                <span id="liveBalance">0.0000</span>
+                <span class="balance-ticker">SLATE</span>
+            </p>
+            <button class="btn-slate-layer" style="font-size:12px; padding:10px 20px; margin:24px auto 0; display:inline-flex; width:auto; border-radius:20px; font-family:var(--font-mono);" onclick="copyActiveAddressToClipboard()">
+                <span style="opacity:0.5; margin-right:8px;">#</span> Copy Identifier Hash
+            </button>
+        </div>
+
+        <div id="tabTx" class="dashboard-grid">
+            <div class="dashboard-side">
+                <div class="sub-slab-container">
+                    <h3>Initiate Transfer</h3>
+                    <input type="text" id="txTargetHandle" placeholder="Recipient handle (@)" style="margin-bottom:16px;">
+                    <input type="number" step="0.0001" id="txAmount" placeholder="Amount (SLATE)" style="margin-bottom:16px;">
+                    <input type="text" id="txSecurityWord" placeholder="Sign with Card Alpha's 1st word" style="margin-bottom:24px;">
+                    <button onclick="validateAndInjectTransaction()">Sign & Broadcast</button>
+                </div>
+            </div>
+            
+            <div class="dashboard-side">
+                <div class="sub-slab-container" style="display:flex; flex-direction:column; height: 100%;">
+                    <h3>Local Directory</h3>
+                    <div style="display:flex; gap:12px; margin-bottom:16px;">
+                        <input type="text" id="newContactHandle" placeholder="Add handle..." style="padding:14px; flex:1;">
+                        <button class="btn-slate-layer" style="width:auto; padding:0 24px;" onclick="addNewContactToList()">Add</button>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex: 1; min-height: 120px;" id="contactsDisplayArea">
+                        <div style="font-size:13px; color:var(--text-muted); text-align:center; padding:32px 20px;">Directory empty.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tabChat" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+            <div class="content-well">
+                <div class="scrollable-feed" id="chatDisplayZone">
+                    <div class="feed-item" style="border-color: var(--accent-slate); background: rgba(129, 140, 248, 0.05);"><span class="feed-author-tag" style="color:var(--accent-slate);">SYSTEM</span>Ephemeral peer tunnel established. Messages are unrecorded on exit.</div>
+                </div>
+            </div>
+            <div style="display:flex; gap:12px; flex-shrink:0;">
+                <input type="text" id="chatInputField" placeholder="Broadcast to swarm..." onkeydown="if(event.key==='Enter') sendMeshChatMessage()">
+                <button style="width:auto; padding:0 40px;" onclick="sendMeshChatMessage()">Send</button>
+            </div>
+        </div>
+
+        <div id="tabMining" style="display:none; flex-direction:column; gap:24px;">
+            <div class="sub-slab-container">
+                <h3>Proof of Work Engine</h3>
+                <p style="font-size:15px; color:var(--text-muted); margin:0 0 24px 0; line-height:1.6;">
+                    <strong style="color:var(--text-main);">Automine is Active.</strong> The engine runs SHA-256 hashes to mint new SLATE when this window is visible. Tab switching instantly suspends processing to preserve battery.
+                </p>
+                <div class="telemetry-block">
+                    <div style="margin-bottom:12px;">STATUS: <span id="mineStatusText" style="color:var(--text-muted); font-weight:700;">SUSPENDED</span></div>
+                    <div style="margin-bottom:12px; color:var(--text-muted);">NONCE: <span id="mineNonceCounter" style="color:var(--accent-primary);">0</span></div>
+                    <div style="color:var(--text-muted);">TIP_HASH: <span id="lblPrevHash" style="color:var(--accent-primary);">00000a11...</span></div>
+                </div>
+                <button id="btnToggleMining" onclick="manualOverrideToggle()" class="btn-slate-layer">Suspend Automine Subroutine</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // --- UI HELPERS ---
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        let icon = '⚡';
+        if (type === 'success') icon = '✓';
+        if (type === 'error') icon = '✕';
+        
+        toast.innerHTML = `<span style="font-size:16px;">${icon}</span> ${message}`;
+        container.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.animation = 'toastExit 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+            setTimeout(() => toast.remove(), 500);
+        }, 4000);
+    }
+
+    // --- CORE LOGIC ---
+    let networkMeshRouter = null, walletActiveIdentity = null, localHandle = "";
+    let addressRegistryBook = {}, blockchainLedger = [], connectedPeerChannels = {};
+    let uniqueSeenPacketCache = new Set();
+    let cachedSessionVerifyWord1 = "", cachedSessionVerifyWord2 = "";
+    let savedContactsArray = [], BIP39_WORDLIST = [];
+    
+    let currentGeneratedSeedsMemoryMap = { a: "", b: "", c: "" };
+    let isCurrentlyMining = false, miningIntervalLoop = null, localNonceCount = 0;
+    let automineAllowedByOverride = true;
+
+    const CORE_SWARM_NAMESPACE_PREFIX = "openslate-v5-swarm-";
+    const RANDOM_NODE_SESSION_ID = Math.floor(Math.random() * 8).toString();
+
+    const GENESIS_BLOCK = {
+        index: 0, id: "00000a11884c7d659a2f3081a11884c7d659a2f3081a11884c7d659a2f308122",
+        parentHash: "0000000000000000000000000000000000000000000000000000000000000000",
+        from: "EMISSION_MATRIX", to: "NETWORK_POOL", amount: 1000.00, nonce: 0, timestamp: 1773095200000
+    };
+    blockchainLedger.push(GENESIS_BLOCK);
+
+    const FALLBACK_DICTIONARY = ["alpha","bravo","charlie","delta","echo","foxtrot","golf","hotel","india","juliet","kilo","lima","mike","november","oscar","papa","quebec","romeo","sierra","tango","uniform","victor","whiskey","xray","yankee","zulu"];
+
+    async function loadAuthoritativeWordlist() {
+        try {
+            const res = await fetch("https://raw.githubusercontent.com/bitcoin/bips/master/bip-0039/english.txt");
+            if (!res.ok) throw new Error();
+            BIP39_WORDLIST = (await res.text()).split("\n").map(w => w.trim()).filter(w => w.length > 0);
+        } catch (e) {
+            BIP39_WORDLIST = FALLBACK_DICTIONARY;
+        }
+    }
+
+    async function computeSHA256HashHex(text) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(text);
+        const digest = await crypto.subtle.digest('SHA-256', data);
+        return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function calculateBlockHash(block) {
+        let serializedString = block.index + block.parentHash + block.from + block.to + block.amount + block.nonce + block.timestamp;
+        return await computeSHA256HashHex(serializedString);
+    }
+
+    function generateRandomStringSegment() {
+        let selection = [];
+        const cryptoBuffer = new Uint32Array(12);
+        window.crypto.getRandomValues(cryptoBuffer);
+        for(let i=0; i<12; i++) { selection.push(BIP39_WORDLIST[cryptoBuffer[i] % BIP39_WORDLIST.length]); }
+        return selection.join(" ");
+    }
+
+    async function generateThresholdKeyVitals() {
+        const username = document.getElementById('regUsername').value.trim().toLowerCase();
+        if(!username) return showToast("Enter a handle first.", "error");
+        
+        showToast("Compiling cryptography...", "info");
+        const targetAccountAddress = await computeSHA256HashHex(username);
+
+        const seedA = generateRandomStringSegment(); const seedB = generateRandomStringSegment(); const seedC = generateRandomStringSegment();
+        currentGeneratedSeedsMemoryMap.a = seedA; currentGeneratedSeedsMemoryMap.b = seedB; currentGeneratedSeedsMemoryMap.c = seedC;
+
+        const lockAB = await computeSHA256HashHex((await computeSHA256HashHex(seedA)) + (await computeSHA256HashHex(seedB)));
+        
+        addressRegistryBook[targetAccountAddress] = { handle: username, locks: [lockAB] };
+
+        document.getElementById('cardA').innerText = seedA; document.getElementById('cardB').innerText = seedB; document.getElementById('cardC').innerText = seedC;
+        document.getElementById('seedOutputZone').style.display = "block";
+        document.getElementById('regInputArea').style.display = "none";
+        showToast("Seeds generated successfully.", "success");
+    }
+
+    async function executeThresholdLogin() {
+        const username = document.getElementById('loginUsername').value.trim().toLowerCase();
+        const rawSeed1 = document.getElementById('loginSeed1').value.trim().toLowerCase();
+        const rawSeed2 = document.getElementById('loginSeed2').value.trim().toLowerCase();
+
+        if(!username || !rawSeed1) return showToast("Credentials required.", "error");
+        const derivedAccountAddress = await computeSHA256HashHex(username);
+        
+        cachedSessionVerifyWord1 = rawSeed1.split(" ")[0];
+        cachedSessionVerifyWord2 = rawSeed2.split(" ")[0];
+        walletActiveIdentity = derivedAccountAddress;
+        localHandle = username;
+
+        document.getElementById('activeUser').innerText = username;
+        updateMiningLabelDiagnostics();
+        refreshInterfaceBalances();
+        switchScreen('screenDashboard');
+        showToast(`Welcome back, @${username}`, "success");
+        
+        evaluateAutominingState();
+    }
+
+    function updateMiningLabelDiagnostics() {
+        const tip = blockchainLedger[blockchainLedger.length - 1];
+        document.getElementById('lblPrevHash').innerText = tip.id.substring(0, 24) + "...";
+    }
+
+    function evaluateAutominingState() {
+        if (!walletActiveIdentity) return; 
+        if (document.visibilityState === "visible" && automineAllowedByOverride) {
+            startMiningEngineLoop();
+        } else {
+            stopMiningEngineLoop();
+        }
+    }
+
+    function manualOverrideToggle() {
+        const btn = document.getElementById('btnToggleMining');
+        if (automineAllowedByOverride) {
+            automineAllowedByOverride = false;
+            btn.innerText = "Resume Automine Subroutine";
+            stopMiningEngineLoop();
+            showToast("Automining suspended.", "info");
+        } else {
+            automineAllowedByOverride = true;
+            btn.innerText = "Suspend Automine Subroutine";
+            evaluateAutominingState();
+            showToast("Automining resumed.", "success");
+        }
+    }
+
+    function startMiningEngineLoop() {
+        if (isCurrentlyMining) return;
+        isCurrentlyMining = true;
+        
+        const statusText = document.getElementById('mineStatusText');
+        statusText.innerHTML = "COMPUTING <span class='pulse-text'>●</span>";
+        statusText.style.color = "var(--accent-warning)";
+        
+        miningIntervalLoop = setInterval(async () => {
+            const lastKnownGlobalBlock = blockchainLedger[blockchainLedger.length - 1];
+            
+            for(let i=0; i<65; i++) {
+                localNonceCount++;
+                let candidateBlock = {
+                    index: lastKnownGlobalBlock.index + 1, parentHash: lastKnownGlobalBlock.id,
+                    from: "EMISSION_MATRIX", to: walletActiveIdentity, amount: 5.0000,
+                    nonce: localNonceCount, timestamp: Date.now()
+                };
+
+                let computedHash = await calculateBlockHash(candidateBlock);
+                if(computedHash.startsWith("000")) { 
+                    candidateBlock.id = computedHash;
+                    blockchainLedger.push(candidateBlock);
+                    gossipBroadcastPacket({ type: "BLOCKCHAIN_BLOCK_PROPAGATE", block: candidateBlock });
+                    
+                    showToast("Work puzzle solved! +5.0000 SLATE", "success");
+                    updateMiningLabelDiagnostics();
+                    refreshInterfaceBalances();
+                    break;
+                }
+            }
+            document.getElementById('mineNonceCounter').innerText = localNonceCount.toLocaleString();
+        }, 40);
+    }
+
+    function stopMiningEngineLoop() {
+        if (!isCurrentlyMining) return;
+        clearInterval(miningIntervalLoop);
+        isCurrentlyMining = false;
+        
+        const statusText = document.getElementById('mineStatusText');
+        statusText.innerText = "SUSPENDED";
+        statusText.style.color = "var(--text-muted)";
+    }
+
+    document.addEventListener("visibilitychange", evaluateAutominingState);
+
+    async function validateAndInjectTransaction() {
+        if(!walletActiveIdentity) return;
+        const targetHandle = document.getElementById('txTargetHandle').value.trim().toLowerCase();
+        const amount = parseFloat(document.getElementById('txAmount').value.trim());
+        const entryWord = document.getElementById('txSecurityWord').value.trim().toLowerCase();
+
+        if(!targetHandle || isNaN(amount) || amount <= 0) return showToast("Invalid transfer values.", "error");
+        if(entryWord !== cachedSessionVerifyWord1 && entryWord !== cachedSessionVerifyWord2) return showToast("Signature validation failed.", "error");
+
+        let targetAddressHex = await computeSHA256HashHex(targetHandle);
+        if(calculateBalance() < amount) return showToast("Insufficient balance.", "error");
+
+        const lastBlock = blockchainLedger[blockchainLedger.length - 1];
+        let txBlock = {
+            index: lastBlock.index + 1, parentHash: lastBlock.id,
+            from: walletActiveIdentity, to: targetAddressHex, amount: amount,
+            nonce: Math.floor(Math.random() * 1000000), timestamp: Date.now()
+        };
+        txBlock.id = await calculateBlockHash(txBlock);
+
+        blockchainLedger.push(txBlock);
+        gossipBroadcastPacket({ type: "BLOCKCHAIN_BLOCK_PROPAGATE", block: txBlock });
+        
+        document.getElementById('txSecurityWord').value = ""; document.getElementById('txTargetHandle').value = ""; document.getElementById('txAmount').value = "";
+        updateMiningLabelDiagnostics();
+        refreshInterfaceBalances();
+        showToast("Transaction signed and broadcasted.", "success");
+    }
+
+    function calculateBalance() {
+        let bal = 0;
+        blockchainLedger.forEach(b => {
+            if(b.from === walletActiveIdentity) bal -= b.amount;
+            if(b.to === walletActiveIdentity) bal += b.amount;
+        });
+        return bal;
+    }
+
+    function refreshInterfaceBalances() {
+        if (!walletActiveIdentity) return;
+        document.getElementById('liveBalance').innerText = calculateBalance().toFixed(4);
+    }
+
+    function initializeNetworkMeshSocketLayer() {
+        networkMeshRouter = new Peer(CORE_SWARM_NAMESPACE_PREFIX + RANDOM_NODE_SESSION_ID);
+        networkMeshRouter.on('open', () => {
+            document.getElementById('netDot').style.background = "var(--accent-success)";
+            document.getElementById('netDot').style.boxShadow = "0 0 12px var(--accent-success)";
+            document.getElementById('networkStatusText').innerText = "Swarm Fabric Engaged";
+            for(let i = 0; i < 8; i++) {
+                if(i.toString() !== RANDOM_NODE_SESSION_ID) {
+                    let conn = networkMeshRouter.connect(CORE_SWARM_NAMESPACE_PREFIX + i, {reliable: false});
+                    if(conn) bindChannelEvents(conn);
+                }
+            }
+        });
+        networkMeshRouter.on('connection', bindChannelEvents);
+        networkMeshRouter.on('error', () => {
+            document.getElementById('netDot').style.background = "var(--accent-error)";
+            document.getElementById('netDot').style.boxShadow = "0 0 12px var(--accent-error)";
+            document.getElementById('networkStatusText').innerText = "Fallback Solo Loop";
+        });
+    }
+
+    function bindChannelEvents(conn) {
+        conn.on('open', () => {
+            if (connectedPeerChannels[conn.peer]) return;
+            connectedPeerChannels[conn.peer] = conn;
+            conn.send({ type: "CHAIN_SYNC_REQUEST", chain: blockchainLedger });
+        });
+
+        conn.on('data', async (data) => {
+            if (uniqueSeenPacketCache.has(data.packetId)) return;
+            uniqueSeenPacketCache.add(data.packetId);
+
+            if (data.type === "CHAIN_SYNC_REQUEST") {
+                if (data.chain && data.chain.length > blockchainLedger.length) {
+                    blockchainLedger = data.chain;
+                    refreshInterfaceBalances();
+                    updateMiningLabelDiagnostics();
+                }
+            }
+            else if (data.type === "BLOCKCHAIN_BLOCK_PROPAGATE") {
+                blockchainLedger.push(data.block);
+                refreshInterfaceBalances();
+                updateMiningLabelDiagnostics();
+                if (data.block.to === walletActiveIdentity && data.block.from !== "EMISSION_MATRIX") {
+                    showToast(`Received ${data.block.amount.toFixed(4)} SLATE!`, "success");
+                }
+                gossipBroadcastPacket(data);
+            }
+            else if (data.type === "CHAT_MESSAGE_BROADCAST") {
+                appendChatMessageToBox(data.author, data.message);
+                gossipBroadcastPacket(data);
+            }
+        });
+        conn.on('close', () => { delete connectedPeerChannels[conn.peer]; });
+    }
+
+    function gossipBroadcastPacket(payload) {
+        if (!payload.packetId) payload.packetId = Math.random().toString(36).substring(2) + Date.now();
+        if (uniqueSeenPacketCache.has(payload.packetId)) return;
+        uniqueSeenPacketCache.add(payload.packetId);
+        Object.keys(connectedPeerChannels).forEach(pId => connectedPeerChannels[pId].send(payload));
+    }
+
+    function addNewContactToList() {
+        const input = document.getElementById('newContactHandle');
+        const handle = input.value.trim().toLowerCase();
+        if(!handle || savedContactsArray.includes(handle)) return;
+        savedContactsArray.push(handle);
+        renderContactsInterface();
+        input.value = "";
+    }
+
+    function renderContactsInterface() {
+        const area = document.getElementById('contactsDisplayArea');
+        area.innerHTML = "";
+        savedContactsArray.forEach(c => {
+            const div = document.createElement('div');
+            div.style = "display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:14px 18px; border-radius:12px; border:1px solid var(--border-subtle); font-size:14px;";
+            div.innerHTML = `<span style="font-weight:700; color:var(--accent-primary);">@${c}</span><span style="color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:800;letter-spacing:0.05em;" onclick="document.getElementById('txTargetHandle').value='${c}'">USE</span>`;
+            area.appendChild(div);
+        });
+    }
+
+    function sendMeshChatMessage() {
+        const field = document.getElementById('chatInputField');
+        const text = field.value.trim();
+        if(!text) return;
+        gossipBroadcastPacket({ type: "CHAT_MESSAGE_BROADCAST", author: localHandle, message: text });
+        appendChatMessageToBox(localHandle, text);
+        field.value = "";
+    }
+
+    function appendChatMessageToBox(author, message) {
+        const box = document.getElementById('chatDisplayZone');
+        const line = document.createElement('div');
+        line.className = "feed-item";
+        line.innerHTML = `<span class="feed-author-tag">${author}</span> <span style="color:var(--text-main);">${message}</span>`;
+        box.appendChild(line);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function exportThresholdVitalsPDF() {
+        const { jsPDF } = window.jspdf; const doc = new jsPDF();
+        doc.setFont("Courier", "bold"); doc.text("OPENSLATE KEY INTEGRITY", 14, 20);
+        doc.setFont("Courier", "normal"); doc.text(`Handle: @${document.getElementById('regUsername').value}`, 14, 30);
+        doc.text("ALPHA:", 14, 48); doc.text(doc.splitTextToSize(currentGeneratedSeedsMemoryMap.a, 180), 14, 56);
+        doc.text("BETA:", 14, 80); doc.text(doc.splitTextToSize(currentGeneratedSeedsMemoryMap.b, 180), 14, 88);
+        doc.save(`openslate-${document.getElementById('regUsername').value}.pdf`);
+    }
+
+    function copyActiveAddressToClipboard() { 
+        navigator.clipboard.writeText(walletActiveIdentity); 
+        showToast("Identifier hash copied to clipboard.", "info"); 
+    }
+    
+    function switchTab(t) {
+        ['tabTx', 'tabChat', 'tabMining'].forEach(tab => document.getElementById(tab).style.display = 'none');
+        ['btnTabTx', 'btnTabChat', 'btnTabMining'].forEach(btn => document.getElementById(btn).classList.remove('active'));
+        document.getElementById(t).style.display = t === 'tabChat' || t === 'tabMining' ? 'flex' : '';
+        if (t === 'tabTx') document.getElementById('tabTx').style.display = 'flex';
+        document.getElementById('btn' + t.charAt(0).toUpperCase() + t.slice(1)).classList.add('active');
+    }
+    
+    function switchScreen(s) {
+        document.querySelectorAll('.screen').forEach(scr => scr.classList.remove('active'));
+        document.getElementById(s).classList.add('active');
+    }
+    
+    function terminateSessionLogout() {
+        stopMiningEngineLoop();
+        walletActiveIdentity = null; localHandle = "";
+        switchScreen('screenLogin');
+        showToast("Session disconnected securely.", "info");
+    }
+
+    window.onload = async () => {
+        await loadAuthoritativeWordlist();
+        initializeNetworkMeshSocketLayer();
+    };
+</script>
+</body>
+</html>
